@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semainier — agenda hebdomadaire</title>
+<meta name="description" content="Agenda hebdomadaire personnel : cours importés, événements et tâches, vue lundi à dimanche, impression en PDF.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="toolbar">
+  <div class="brand">
+    <span class="brand-mark">Semainier<span class="accent">.</span></span>
+  </div>
+
+  <div class="week-nav">
+    <button class="icon-btn no-print" id="prevWeek" aria-label="Semaine précédente" title="Semaine précédente">‹</button>
+    <div class="week-label" id="weekLabel">—</div>
+    <button class="icon-btn no-print" id="nextWeek" aria-label="Semaine suivante" title="Semaine suivante">›</button>
+    <button class="btn btn-ghost no-print" id="todayBtn">Aujourd’hui</button>
+  </div>
+
+  <div class="actions no-print">
+    <button class="btn btn-ghost" id="importBtn">Importer les cours</button>
+    <button class="btn btn-ghost" id="printBtn">Imprimer</button>
+    <button class="btn btn-primary" id="addBtn">+ Ajouter</button>
+  </div>
+</header>
+
+<div class="legend" aria-hidden="false">
+  <span class="legend-item"><i class="dot dot-course"></i>Cours</span>
+  <span class="legend-item"><i class="dot dot-event"></i>Événement</span>
+  <span class="legend-item"><i class="dot dot-task"></i>Tâche</span>
+  <span class="legend-item legend-sync no-print" id="syncStatus">Stockage local</span>
+</div>
+
+<main class="calendar-wrapper">
+  <div class="calendar-scroll" id="calendarScroll">
+    <div class="calendar-grid" id="calendarGrid">
+      <div class="corner-cell"></div>
+      <!-- 7 × .day-header-cell, 24 × .hour-label, 7 × .day-col injected by JS -->
+    </div>
+  </div>
+</main>
+
+<!-- Modale ajout / édition d'un événement ou d'une tâche -->
+<dialog id="itemModal" class="modal no-print">
+  <form method="dialog" id="itemForm">
+    <h2 id="modalTitle">Ajouter</h2>
+
+    <div class="field-row" id="typeSwitchRow">
+      <label class="radio-pill">
+        <input type="radio" name="itemType" value="event" checked>
+        <span>Événement</span>
+      </label>
+      <label class="radio-pill">
+        <input type="radio" name="itemType" value="task">
+        <span>Tâche</span>
+      </label>
+    </div>
+
+    <label class="field">
+      <span>Titre</span>
+      <input type="text" id="fieldTitle" required maxlength="120" placeholder="Ex. Rendu de TP, Anniversaire, Sport…">
+    </label>
+
+    <div class="field-pair">
+      <label class="field">
+        <span>Début</span>
+        <input type="datetime-local" id="fieldStart" required>
+      </label>
+      <label class="field">
+        <span>Fin</span>
+        <input type="datetime-local" id="fieldEnd" required>
+      </label>
+    </div>
+
+    <label class="field">
+      <span>Lieu</span>
+      <input type="text" id="fieldLocation" maxlength="120" placeholder="Ex. Bibliothèque, Salle E05…">
+    </label>
+
+    <label class="field">
+      <span>Description courte</span>
+      <textarea id="fieldDescription" rows="2" maxlength="280" placeholder="Quelques mots suffisent…"></textarea>
+    </label>
+
+    <label class="field field-checkbox" id="doneRow" hidden>
+      <input type="checkbox" id="fieldDone">
+      <span>Marquer comme terminée</span>
+    </label>
+
+    <p class="field-error" id="formError" hidden></p>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="deleteItemBtn" hidden>Supprimer</button>
+      <div class="modal-actions-right">
+        <button type="button" class="btn btn-ghost" id="cancelItemBtn">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="saveItemBtn">Enregistrer</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Modale détail lecture seule d'un cours -->
+<dialog id="courseModal" class="modal no-print">
+  <div class="course-detail">
+    <span class="course-tag" id="courseTag">Cours</span>
+    <h2 id="courseTitle">—</h2>
+    <dl id="courseMeta" class="detail-list"></dl>
+    <div class="modal-actions">
+      <div class="modal-actions-right">
+        <button type="button" class="btn btn-primary" id="closeCourseBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Modale import ICS -->
+<dialog id="importModal" class="modal no-print">
+  <div class="import-panel">
+    <h2>Importer le calendrier des cours</h2>
+    <p class="hint">Colle ou modifie l’adresse de ton flux ICS (EDT Bot ou autre), puis récupère les cours. Si le navigateur bloque la récupération directe, dépose plutôt le fichier .ics téléchargé depuis ce lien.</p>
+
+    <label class="field">
+      <span>Adresse du flux .ics</span>
+      <input type="url" id="icsUrl" value="https://api.edtbot.fr/ics?&amp;tag_id=45&amp;tag_id=46&amp;tag_id=47&amp;">
+    </label>
+
+    <div class="import-actions">
+      <button type="button" class="btn btn-primary" id="fetchIcsBtn">Récupérer depuis l’adresse</button>
+      <span class="or-sep">ou</span>
+      <label class="btn btn-ghost file-btn">
+        Déposer un fichier .ics
+        <input type="file" id="icsFile" accept=".ics,text/calendar" hidden>
+      </label>
+    </div>
+
+    <p class="import-status" id="importStatus" hidden></p>
+
+    <div class="modal-actions">
+      <div class="modal-actions-right">
+        <button type="button" class="btn btn-ghost" id="closeImportBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" class="toast no-print" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
